@@ -3,7 +3,7 @@
 ;; scoring function to evaluate each game object
 
 ;; Redefine a colon as whitespace
-(set-syntax-from-char #\: #\Space)
+;; (set-syntax-from-char #\: #\Space)
 
 (defun parse-game-line (line)
   (declare (optimize debug))
@@ -20,11 +20,8 @@
 (parse-game-line "Card 1: 41 48 83 86 17 | 83 86  6 31 17  9 48 53")
 |#
 
-(defun card-point-value (game)
-  (let ((num-matches (length (intersection (second game) (third game)))))
-    (if (plusp num-matches)
-	(expt 2 (1- num-matches))
-	0)))
+(defun num-matches (game)
+  (length (intersection (second game) (third game))))
 
 #|
 (card-point-value (parse-game-line "Card 1: 41 48 83 86 17 | 83 86  6 31 17  9 48 53"))
@@ -35,8 +32,36 @@
 (card-point-value (parse-game-line "Card 6: 31 18 13 56 72 | 74 77 10 23 35 67 36 11"))
 |#
 
-(defun 1204-1 (filename)
+(defun 1204-2 (filename)
+  (declare (optimize debug))
   (with-open-file (in filename)
-    (loop for line = (read-line in nil nil)
-	  while line
-	  sum (card-point-value (parse-game-line line)))))
+    (let ((reader (copy-readtable)))
+      (handler-case
+	(progn
+	  (setf *readtable* (copy-readtable))
+	  (set-syntax-from-char #\: #\Space)
+	  (prog1
+	      (do ((line (read-line in nil nil) (read-line in nil nil))
+		   (card-set (make-array 10 :fill-pointer 0 :adjustable t :initial-element 0))
+		   (num-cards 0))
+		  ((not line)
+		   (format t "End with cardset: ~A~%" card-set)
+		   (reduce #'+ card-set))
+		(let ((card-data (parse-game-line line)))
+		  (format t "Read card: ~A~%" card-data)
+		  ;; Add winning cards
+		  (let* ((wins (num-matches card-data))
+			 (num (first card-data))
+			 (max-size (+ num wins 1)))
+		    (when (< (fill-pointer card-set) max-size)
+		      (adjust-array card-set (+ max-size 2) :fill-pointer (1+ max-size)))
+		    (incf (aref card-set num))
+		    (format t "Have ~A of card ~A~%" (aref card-set num) num)
+		    (dotimes (i wins)
+		      (incf (aref card-set (+ num i 1))
+			    (aref card-set num))))))
+	    (setf *readtable* reader)))
+	(error (c)
+	  (setf *readtable* reader)
+	  (error c))))))
+	  
